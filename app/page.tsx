@@ -40,33 +40,20 @@ function fmtExp(exp: string): string {
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
-function cellBg(val: number, maxVal: number, minVal: number, isKingRow: boolean): string {
-  if (isKingRow) {
-    if (!val) return 'rgba(245,200,66,0.08)';
-    const intensity = val > 0
-      ? Math.pow(val / maxVal, 0.5)
-      : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
-    const alpha = 0.08 + intensity * 0.5;
-    return val > 0
-      ? `rgba(245,200,66,${alpha.toFixed(3)})`
-      : `rgba(147,51,234,${alpha.toFixed(3)})`;
-  }
-  if (!val) return 'rgba(8,145,178,0.04)';
+function cellBg(val: number, maxVal: number, minVal: number, isKingCell: boolean): string {
+  if (isKingCell) return 'rgba(245,200,66,0.85)';
+  if (!val) return 'rgba(8,145,178,0.13)';
   const intensity = val > 0
     ? Math.pow(val / maxVal, 0.5)
     : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
-  const alpha = val > 0
-    ? 0.07 + intensity * 0.75
-    : 0.07 + intensity * 0.88;
-  return val > 0
-    ? `rgba(8,145,178,${alpha.toFixed(3)})`
-    : `rgba(147,51,234,${alpha.toFixed(3)})`;
+  if (val > 0) return `rgba(8,145,178,${(0.13 + intensity * 0.75).toFixed(3)})`;
+  return `rgba(147,51,234,${(0.13 + intensity * 0.80).toFixed(3)})`;
 }
 
 export default function Home() {
   const [ticker,     setTicker]     = useState('SPY');
   const [input,      setInput]      = useState('SPY');
-  const [maxExp,     setMaxExp]     = useState(8);
+  const [maxExp,     setMaxExp]     = useState(5);
   const [data,       setData]       = useState<GexData|null>(null);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string|null>(null);
@@ -74,7 +61,6 @@ export default function Home() {
   const [trackKing,  setTrackKing]  = useState(false);
   const timerRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const kingRowRef = useRef<HTMLTableRowElement|null>(null);
-  const tableRef   = useRef<HTMLDivElement|null>(null);
 
   const fetchGex = useCallback(async (tkr: string, exp: number) => {
     setLoading(true); setError(null);
@@ -91,7 +77,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchGex(ticker, maxExp);
-    timerRef.current = setInterval(() => fetchGex(ticker, maxExp), 30000);
+    timerRef.current = setInterval(() => fetchGex(ticker, maxExp), 60000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [ticker, maxExp, fetchGex]);
 
@@ -184,8 +170,8 @@ export default function Home() {
       )}
 
       {data?(
-        <div ref={tableRef} style={{padding:'8px 20px 40px',overflowX:'auto'}}>
-          <div style={{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',justifyContent:'space-between'}}>
+        <div style={{padding:'8px 20px 40px',overflowX:'auto'}}>
+          <div style={{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
             <span>{data.ticker} GEX HEATMAP · SPOT: {fmtPrice(data.spotPrice)} · {data.strikes.length} STRIKES · {data.expirations.length} EXPIRATIONS</span>
             <span style={{display:'flex',gap:16}}>
               <span style={{color:'#f5c842'}}>👑 King Node</span>
@@ -199,7 +185,7 @@ export default function Home() {
               <tr>
                 <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90,position:'sticky',left:0,background:'#080b12',zIndex:2}}>Strike</th>
                 {data.expirations.map(exp=>(
-                  <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:110}}>
+                  <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:120}}>
                     {fmtExp(exp)}
                   </th>
                 ))}
@@ -210,17 +196,11 @@ export default function Home() {
                 const isKing     = strike===data.kingStrike;
                 const isNearSpot = strike===nearestStrike;
                 return(
-                  <tr
-                    key={strike}
-                    ref={isKing ? kingRowRef : null}
-                    style={{
-                      borderTop:isKing?'1px solid rgba(245,200,66,0.4)':'1px solid #0a0f1a',
-                      borderBottom:isKing?'1px solid rgba(245,200,66,0.4)':undefined,
-                    }}>
+                  <tr key={strike} ref={isKing?kingRowRef:null} style={{borderTop:'1px solid #0a0f1a'}}>
                     <td style={{
                       padding:'4px 12px',
-                      background:isKing?'rgba(245,200,66,0.15)':isNearSpot?'rgba(56,189,248,0.08)':'#080b12',
-                      borderRight:isKing?'2px solid rgba(245,200,66,0.5)':'1px solid #1e2a3a',
+                      background:isNearSpot?'rgba(56,189,248,0.08)':'#080b12',
+                      borderRight:'1px solid #1e2a3a',
                       position:'sticky',left:0,zIndex:1,
                     }}>
                       <span style={{color:isKing?'#f5c842':isNearSpot?'#38bdf8':'#94a3b8',fontWeight:isKing||isNearSpot?700:400,fontSize:isKing?13:12}}>
@@ -231,17 +211,9 @@ export default function Home() {
                       const val=data.values[si]?.[ei]??0;
                       const isKingCell=isKing&&exp===data.kingExp;
                       return(
-                        <td key={exp} style={{
-                          padding:'4px 10px',
-                          textAlign:'right',
-                          background:cellBg(val,data.maxValue,data.minValue,isKing),
-                          outline:isKingCell?'2px solid rgba(245,200,66,0.7)':'none',
-                          outlineOffset:'-2px',
-                        }}>
+                        <td key={exp} style={{padding:'4px 10px',textAlign:'right',background:cellBg(val,data.maxValue,data.minValue,isKingCell)}}>
                           <span style={{
-                            color:isKing
-                              ?(val>0?'#fde68a':val<0?'#c084fc':'#92794a')
-                              :(val>0?'#a5f3fc':val<0?'#c084fc':'#374151'),
+                            color:isKingCell?'#080b12':(val>0?'#a5f3fc':val<0?'#c084fc':'#2a4a5a'),
                             fontWeight:isKingCell?700:400,
                           }}>
                             {val!==0?fmt(val):'—'}
