@@ -1,107 +1,179 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Static snapshot sourced directly from Skylit API response — 2026-04-01T14:02:34Z
-// King node = single cell with highest ABSOLUTE value (not row total)
-// Color scaling uses independent maxValue (positive) and minValue (negative)
+const RISK_FREE_RATE = 0.05;
+const MAX_GEX_PER_CONTRACT = 50_000_000;
+const STRIKE_RANGE = 0.20; // ±20% of spot
 
-const STATIC_SNAPSHOT = {
-  ticker: 'SPY',
-  spotPrice: 654.69,
-  expirations: ['2026-04-01','2026-04-02','2026-04-06','2026-04-07','2026-04-08'],
-  strikes: [
-    620,621,622,623,624,625,626,627,628,629,
-    630,631,632,633,634,635,636,637,638,639,
-    640,641,642,643,644,645,646,647,648,649,
-    650,651,652,653,654,655,656,657,658,659,
-    660,661,662,663,664,665,666,667,668,669,
-    670,671,672,673,674,675,676,677,678,679,
-    680,681,682,683,684,685,686,687,
-  ],
-  values: [
-    [254151,3902,127580,121798,417477],
-    [-333046,-49543,-134236,-112171,-26071],
-    [-458327,233673,192722,-347774,7993],
-    [317277,-512,1696300,-77080,10705],
-    [-267133,-793480,600909,-6345591,-106121],
-    [-492686,4735058,-8777881,26962,-1063622],
-    [65893,438319,53103,-72799,46204],
-    [-382527,163482,528771,133571,11203],
-    [-285561,1203095,539889,547856,53288],
-    [67111,-168851,-243445,-106863,-11191],
-    [903156,21433162,-2454770,1033777,-387414],
-    [6097,639362,404275,334670,345745],
-    [845091,1313642,662918,150716,124878],
-    [405857,1130047,522421,290483,153945],
-    [215507,3601563,726879,-205860,139476],
-    [1674981,-20446257,195503,-679004,-845959],
-    [-549266,3021154,308810,-136785,-228151],
-    [916359,-688885,1720,-181987,-32383],
-    [610286,9650833,833173,-38530,-731291],
-    [1969414,393060,-472209,62510,-231814],
-    [2448328,49877564,-458890,1301161,-137803],
-    [-157215,3688284,131415,-862193,249457],
-    [669068,483566,-37034,520134,485944],
-    [1246288,-3664636,1386024,276585,270581],
-    [1610575,4710293,973748,-141281,68949],
-    [13879476,26504176,-22305733,-3447989,-651146],
-    [6216563,2311703,-345829,-141816,119638],
-    [-4101427,3989510,768692,-293351,676702],
-    [448149,17469979,2972061,600363,665129],
-    [-13304130,1364123,-961441,1385983,544170],
-    [27053200,17109012,1637109,466294,479540],
-    [13943779,4818873,-1370436,-357505,346937],
-    [3151237,6677006,607170,1101105,1339937],
-    [51184442,2874309,3141667,477662,281129],
-    [33582144,9958080,359235,1338157,432331],
-    [-47037472,23907229,12259097,1874266,1044122],
-    [1546389,-2121276,472229,3719908,565248],
-    [5985543,28915163,1814486,997261,244305],
-    [-667982,283700,1382208,960920,199005],
-    [-31306687,-1138299,-166735,294381,454759],
-    [763869,29359522,-101696,7855343,801414],
-    [-4048815,5909289,1316922,2414303,1890876],
-    [-601216,-5793105,1763329,370287,-21031],
-    [-5141741,-10690671,-464837,602152,602894],
-    [1020101,2206779,-701223,1208224,10502],
-    [3069882,11062422,3361796,-4346135,-86928],
-    [217555,495125,1635695,-1166528,309958],
-    [199766,1820837,-598001,516575,652808],
-    [-1091985,3228788,-188803,-99251,274243],
-    [-499167,1781333,-29841,257296,473892],
-    [586681,-4705493,-3361031,782084,-514519],
-    [-111064,1657494,100300,-261127,356505],
-    [-193925,886801,30444,-203828,-110976],
-    [-172309,-1122535,466236,43641,1356567],
-    [10967,702289,471533,-199683,350536],
-    [206310,-3493234,83485,-770000,374536],
-    [-82144,-7768,-186550,-12284,-221047],
-    [-116811,535888,144955,-164543,144737],
-    [-143936,-223361,189952,336800,-475335],
-    [26728,407611,-274065,185564,62757],
-    [-23089,401834,-206226,148931,612312],
-    [102352,458949,53231,-149260,-75383],
-    [-157394,34052,-138860,13988,38507],
-    [-4360,371628,77460,-68564,-4037],
-    [-15376,216877,-99883,1182,47634],
-    [-20423,1273296,-117287,-11132,78654],
-    [25869,-2248612,107305,-7242,32677],
-    [-84284,274434,10157,-3325,34758],
-  ],
-  // King node = cell with highest absolute value
-  kingStrike: 653,
-  kingExp: '2026-04-01',
-  kingGex: 51184442,
-  maxValue: 51184442,   // most positive cell
-  minValue: -47037472,  // most negative cell
-  totalNetGex: 256000000,
-  posStrikes: 32,
-  negStrikes: 10,
-  regime: 'positive' as const,
-  timestamp: new Date().toISOString(),
+function normalPDF(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
+
+function blackScholesGamma(S: number, K: number, T: number, sigma: number): number {
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
+  try {
+    const d1 = (Math.log(S / K) + (RISK_FREE_RATE + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+    return normalPDF(d1) / (S * sigma * Math.sqrt(T));
+  } catch {
+    return 0;
+  }
+}
+
+function capGex(raw: number): number {
+  return Math.sign(raw) * Math.min(Math.abs(raw), MAX_GEX_PER_CONTRACT);
+}
+
+function dateToYMD(ts: number): string {
+  const d = new Date(ts * 1000);
+  return d.toISOString().split('T')[0];
+}
+
+const YAHOO_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
 };
+
+async function fetchYahoo(url: string) {
+  const res = await fetch(url, { headers: YAHOO_HEADERS, next: { revalidate: 0 } });
+  if (!res.ok) throw new Error(`Yahoo fetch failed: ${res.status} ${url}`);
+  return res.json();
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const ticker = (searchParams.get('ticker') || 'SPY').toUpperCase();
-  return NextResponse.json({ ...STATIC_SNAPSHOT, ticker });
+  const ticker  = (searchParams.get('ticker') || 'SPY').toUpperCase();
+  const maxExp  = Math.min(parseInt(searchParams.get('maxExp') || '5'), 8);
+
+  try {
+    // 1. Get spot price + expiration list
+    const base = await fetchYahoo(
+      `https://query1.finance.yahoo.com/v7/finance/options/${ticker}`
+    );
+
+    const result = base?.optionChain?.result?.[0];
+    if (!result) throw new Error('No options data from Yahoo Finance');
+
+    const spot: number = result.quote?.regularMarketPrice;
+    if (!spot) throw new Error('Could not get spot price');
+
+    const allExpirations: number[] = result.expirationDates ?? [];
+    if (!allExpirations.length) throw new Error('No expirations found');
+
+    // 2. Pick nearest N expirations
+    const now = Date.now() / 1000;
+    const selectedExps = allExpirations
+      .filter(ts => ts >= now - 86400) // include today
+      .slice(0, maxExp);
+
+    // 3. Fetch all expirations in parallel
+    const chains = await Promise.all(
+      selectedExps.map(ts =>
+        fetchYahoo(`https://query1.finance.yahoo.com/v7/finance/options/${ticker}?date=${ts}`)
+          .then(d => ({ ts, data: d?.optionChain?.result?.[0]?.options?.[0] ?? null }))
+          .catch(() => ({ ts, data: null }))
+      )
+    );
+
+    // 4. Build strike universe (±20% of spot, step $1)
+    const lo = Math.floor(spot * (1 - STRIKE_RANGE));
+    const hi = Math.ceil(spot  * (1 + STRIKE_RANGE));
+    const strikes: number[] = [];
+    for (let k = lo; k <= hi; k++) strikes.push(k);
+
+    const expirationDates = selectedExps.map(dateToYMD);
+
+    // 5. Build GEX matrix
+    // matrix[strikeIndex][expIndex] = gex value
+    const matrix: number[][] = strikes.map(() => new Array(expirationDates.length).fill(0));
+    let maxValue = 0;
+    let minValue = 0;
+
+    for (let ei = 0; ei < chains.length; ei++) {
+      const { ts, data } = chains[ei];
+      if (!data) continue;
+
+      const expDate = dateToYMD(ts);
+      const T = Math.max((ts - now) / (365 * 24 * 3600), 1 / 365); // min 1 day
+
+      const processContracts = (contracts: any[], isCall: boolean) => {
+        for (const c of contracts) {
+          const K: number = c.strike;
+          if (K < lo || K > hi) continue;
+          const si = K - lo; // index into strikes array (step 1)
+          if (si < 0 || si >= strikes.length) continue;
+
+          const oi: number    = c.openInterest ?? 0;
+          const iv: number    = c.impliedVolatility ?? 0;
+          if (oi === 0 || iv === 0) continue;
+
+          const gamma  = blackScholesGamma(spot, K, T, iv);
+          const rawGex = gamma * oi * spot * spot * (isCall ? 1 : -1);
+          const gex    = capGex(rawGex);
+
+          matrix[si][ei] += gex;
+
+          if (matrix[si][ei] > maxValue) maxValue = matrix[si][ei];
+          if (matrix[si][ei] < minValue) minValue = matrix[si][ei];
+        }
+      };
+
+      processContracts(data.calls ?? [], true);
+      processContracts(data.puts  ?? [], false);
+    }
+
+    // 6. Find king node (highest absolute single cell)
+    let kingStrike = strikes[0];
+    let kingExp    = expirationDates[0];
+    let kingGex    = 0;
+    let kingAbs    = 0;
+
+    for (let si = 0; si < strikes.length; si++) {
+      for (let ei = 0; ei < expirationDates.length; ei++) {
+        const abs = Math.abs(matrix[si][ei]);
+        if (abs > kingAbs) {
+          kingAbs    = abs;
+          kingGex    = matrix[si][ei];
+          kingStrike = strikes[si];
+          kingExp    = expirationDates[ei];
+        }
+      }
+    }
+
+    // 7. Compute stats
+    const strikeTotals: Record<number, number> = {};
+    let totalNetGex = 0;
+    let posStrikes  = 0;
+    let negStrikes  = 0;
+
+    for (let si = 0; si < strikes.length; si++) {
+      const rowTotal = matrix[si].reduce((a, b) => a + b, 0);
+      strikeTotals[strikes[si]] = rowTotal;
+      totalNetGex += rowTotal;
+      if (rowTotal > 0) posStrikes++;
+      else if (rowTotal < 0) negStrikes++;
+    }
+
+    return NextResponse.json({
+      ticker,
+      spotPrice:    spot,
+      expirations:  expirationDates,
+      strikes,
+      values:       matrix,
+      strikeTotals,
+      kingStrike,
+      kingExp,
+      kingGex,
+      maxValue,
+      minValue,
+      totalNetGex,
+      posStrikes,
+      negStrikes,
+      regime:       totalNetGex >= 0 ? 'positive' : 'negative',
+      timestamp:    new Date().toISOString(),
+    });
+
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
