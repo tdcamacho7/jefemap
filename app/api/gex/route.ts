@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const RISK_FREE_RATE = 0.05;
 const MAX_GEX_PER_CONTRACT = 50_000_000;
-const STRIKE_RANGE = 0.20;
 
 function normalPDF(x: number): number {
   return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
@@ -25,7 +24,6 @@ function dateToYMD(ts: number): string {
 }
 
 async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }> {
-  // Step 1: hit Yahoo Finance to get session cookie
   const homeRes = await fetch('https://finance.yahoo.com/', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -35,8 +33,6 @@ async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }> {
     redirect: 'follow',
   });
   const cookie = homeRes.headers.get('set-cookie') ?? '';
-
-  // Step 2: get crumb using that cookie
   const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -100,8 +96,11 @@ export async function GET(req: NextRequest) {
       )
     );
 
-    const lo = Math.floor(spot * (1 - STRIKE_RANGE));
-    const hi = Math.ceil(spot  * (1 + STRIKE_RANGE));
+    // 92 strikes centered on spot — matches Skylit default
+    const center = Math.round(spot);
+    const half = 46;
+    const lo = center - half;
+    const hi = center + half;
     const strikes: number[] = [];
     for (let k = lo; k <= hi; k++) strikes.push(k);
 
@@ -118,7 +117,6 @@ export async function GET(req: NextRequest) {
       const processContracts = (contracts: any[], isCall: boolean) => {
         for (const c of contracts) {
           const K: number = c.strike;
-          if (K < lo || K > hi) continue;
           const si = K - lo;
           if (si < 0 || si >= strikes.length) continue;
           const oi: number = c.openInterest ?? 0;
