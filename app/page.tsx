@@ -128,16 +128,18 @@ export default function Home() {
     : null;
 
   return (
-    <div style={{background:'#0a0a0a',minHeight:'100vh',color:'#e2e8f0',fontFamily:"'IBM Plex Mono',monospace"}}>
+    <div style={{background:'#0a0a0a',minHeight:'100vh',color:'#e2e8f0',fontFamily:"'IBM Plex Mono',monospace",display:'flex',flexDirection:'column',height:'100vh'}}>
 
-      <div style={{padding:'12px 20px',borderBottom:'1px solid #27272a',display:'flex',alignItems:'center',gap:12}}>
+      {/* Header */}
+      <div style={{padding:'10px 20px',borderBottom:'1px solid #27272a',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
         <span style={{fontSize:20,fontWeight:700}}>
           <span style={{color:'#f5c842'}}>JEFE</span><span style={{color:'#e2e8f0'}}>MAP</span>
         </span>
         <span style={{fontSize:10,color:'#52525b',marginLeft:8}}>PROOF OF CONCEPT v0.2</span>
       </div>
 
-      <div style={{padding:'14px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:'1px solid #27272a'}}>
+      {/* Controls */}
+      <div style={{padding:'10px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:'1px solid #27272a',flexShrink:0}}>
         <input value={input} onChange={e=>setInput(e.target.value.toUpperCase())}
           onKeyDown={e=>e.key==='Enter'&&handleScan()} placeholder="Ticker"
           style={{background:'#18181b',border:'1px solid #3f3f46',borderRadius:6,padding:'7px 12px',color:'#e2e8f0',fontSize:13,width:90,fontFamily:'inherit'}}/>
@@ -164,24 +166,27 @@ export default function Home() {
         {error&&<span style={{color:'#ef4444',fontSize:12}}>⚠ {error}</span>}
       </div>
 
+      {/* King Banner */}
       {data&&(
-        <div style={{margin:'12px 20px',background:'rgba(245,200,66,0.06)',border:'1px solid rgba(245,200,66,0.3)',borderRadius:8,padding:'14px 18px'}}>
-          <div style={{fontSize:10,color:'#a18a30',marginBottom:4,letterSpacing:2}}>👑 KING NODE · {data.ticker}</div>
-          <div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>{data.ticker} @ {fmtPrice(data.spotPrice)}</div>
-          <div style={{fontSize:40,fontWeight:700,color:'#f5c842',lineHeight:1,marginBottom:6}}>{data.kingStrike}</div>
-          <div style={{display:'flex',gap:12,marginTop:4,fontSize:11,flexWrap:'wrap'}}>
-            <span style={{background:'rgba(245,200,66,0.2)',color:'#f5c842',padding:'3px 10px',borderRadius:4,fontWeight:700,border:'1px solid rgba(245,200,66,0.4)'}}>
-              {fmt(data.kingGex)}
-            </span>
-            <span style={{color:'#64748b'}}>📍 {(data.spotPrice-data.kingStrike).toFixed(2)} pts from spot</span>
-            <span style={{color:'#3b82f6'}}>📅 {fmtExp(data.kingExp)}</span>
-            <span style={{color:'#52525b',fontSize:10}}>Color scale: {fmt(visMin)} → {fmt(visMax)}</span>
+        <div style={{margin:'8px 20px',background:'rgba(245,200,66,0.06)',border:'1px solid rgba(245,200,66,0.3)',borderRadius:8,padding:'10px 18px',flexShrink:0}}>
+          <div style={{fontSize:10,color:'#a18a30',marginBottom:2,letterSpacing:2}}>👑 KING NODE · {data.ticker}</div>
+          <div style={{display:'flex',alignItems:'baseline',gap:16,flexWrap:'wrap'}}>
+            <div style={{fontSize:36,fontWeight:700,color:'#f5c842',lineHeight:1}}>{data.kingStrike}</div>
+            <div style={{display:'flex',gap:10,fontSize:11,flexWrap:'wrap',alignItems:'center'}}>
+              <span style={{background:'rgba(245,200,66,0.2)',color:'#f5c842',padding:'3px 10px',borderRadius:4,fontWeight:700,border:'1px solid rgba(245,200,66,0.4)'}}>
+                {fmt(data.kingGex)}
+              </span>
+              <span style={{color:'#64748b'}}>📍 {(data.spotPrice-data.kingStrike).toFixed(2)} pts from spot</span>
+              <span style={{color:'#3b82f6'}}>📅 {fmtExp(data.kingExp)}</span>
+              <span style={{color:'#52525b',fontSize:10}}>{data.ticker} @ {fmtPrice(data.spotPrice)}</span>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Stats */}
       {data&&(
-        <div style={{padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap'}}>
+        <div style={{padding:'4px 20px 6px',display:'flex',gap:8,flexWrap:'wrap',flexShrink:0}}>
           {[
             {label:'Spot',val:fmtPrice(data.spotPrice)},
             {label:'Net GEX',val:fmt(data.totalNetGex)},
@@ -189,7 +194,7 @@ export default function Home() {
             {label:'+ Strikes',val:data.posStrikes,color:'#22c55e'},
             {label:'- Strikes',val:data.negStrikes,color:'#ef4444'},
           ].map(({label,val,color})=>(
-            <div key={label} style={{background:'#111111',border:'1px solid #27272a',borderRadius:6,padding:'5px 12px',fontSize:11}}>
+            <div key={label} style={{background:'#111111',border:'1px solid #27272a',borderRadius:6,padding:'4px 10px',fontSize:11}}>
               <span style={{color:'#71717a'}}>{label}: </span>
               <span style={{color:color||'#e2e8f0',fontWeight:600}}>{String(val)}</span>
             </div>
@@ -197,62 +202,91 @@ export default function Home() {
         </div>
       )}
 
+      {/* Heatmap — fills remaining height, both axes scroll with locked headers */}
       {data?(
-        <div style={{padding:'8px 20px 40px',overflowX:'auto'}}>
-          <table style={{borderCollapse:'collapse',fontSize:'10px',width:'100%',tableLayout:'auto'}}>
-            <thead style={{position:'sticky',top:0,zIndex:30}}>
-              <tr>
-                <th style={{textAlign:'left',padding:'4px 8px',color:'rgba(255,255,255,0.85)',fontWeight:600,fontSize:'9px',minWidth:64,position:'sticky',left:0,background:'#0a0a0a',zIndex:40,borderBottom:'1px solid rgba(255,255,255,0.1)'}}>Strike</th>
-                {data.expirations.map(exp=>(
-                  <th key={exp} style={{textAlign:'center',padding:'4px 4px',color:exp===data.kingExp?'#f5c842':'rgba(255,255,255,0.85)',fontWeight:600,fontSize:'9px',minWidth:90,background:'#0a0a0a',borderBottom:'1px solid rgba(255,255,255,0.1)',whiteSpace:'nowrap'}}>
-                    {fmtExp(exp)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...data.strikes].reverse().map((strike,revIdx)=>{
-                const si = data.strikes.length - 1 - revIdx;
-                const isKing     = strike===data.kingStrike;
-                const isNearSpot = strike===nearestStrike;
-                const spotRow    = isNearSpot && !isKing;
-                return(
-                  <tr key={strike} ref={isKing ? kingRowRef : null}>
-                    <td style={{
-                      position:'sticky',left:0,zIndex:10,
-                      padding:'1px 8px',height:'18px',whiteSpace:'nowrap',
-                      background: isKing ? '#ffffff' : spotRow ? '#18181b' : '#0a0a0a',
-                      color: isKing ? '#000000' : spotRow ? '#ffffff' : 'rgba(255,255,255,0.8)',
-                      fontWeight: isKing || spotRow ? 700 : 500,
-                      fontSize:'11px',
-                      clipPath: spotRow ? 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)' : undefined,
+        <div style={{flex:1,overflow:'hidden',padding:'0 20px 20px'}}>
+          <div style={{height:'100%',overflow:'auto',borderRadius:4}}>
+            <table style={{borderCollapse:'collapse',fontSize:'11px',tableLayout:'auto'}}>
+              <thead style={{position:'sticky',top:0,zIndex:30,background:'#0a0a0a'}}>
+                <tr>
+                  <th style={{
+                    textAlign:'left',padding:'5px 10px',
+                    color:'rgba(255,255,255,0.5)',fontWeight:500,fontSize:'10px',
+                    minWidth:70,position:'sticky',left:0,
+                    background:'#0a0a0a',zIndex:40,
+                    borderBottom:'1px solid #27272a',
+                    borderRight:'1px solid #27272a',
+                  }}>Strike</th>
+                  {data.expirations.map(exp=>(
+                    <th key={exp} style={{
+                      textAlign:'right',padding:'5px 10px',
+                      color:exp===data.kingExp?'#f5c842':'rgba(255,255,255,0.7)',
+                      fontWeight:exp===data.kingExp?700:500,
+                      fontSize:'10px',minWidth:110,
+                      background:'#0a0a0a',
+                      borderBottom:'1px solid #27272a',
+                      whiteSpace:'nowrap',
                     }}>
-                      {strike.toFixed(1)}
-                    </td>
-                    {data.expirations.map((exp,ei)=>{
-                      const val=data.values[si]?.[ei]??0;
-                      const isKingCell=isKing&&exp===data.kingExp;
-                      return(
-                        <td key={exp} style={{
-                          padding:'1px 8px',height:'18px',textAlign:'right',
-                          background: cellBg(val, visMax, visMin, isKingCell),
-                          boxShadow: isKingCell ? 'inset 0 0 0 2px rgba(168,85,247,0.6)' : 'none',
-                          whiteSpace:'nowrap',
-                        }}>
-                          <span style={{color:cellTextColor(val,isKingCell),fontWeight:isKingCell?700:400,fontSize:'10px'}}>
-                            {val!==0 ? fmt(val) : '$0.00'}
-                          </span>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {fmtExp(exp)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...data.strikes].reverse().map((strike,revIdx)=>{
+                  const si = data.strikes.length - 1 - revIdx;
+                  const isKing     = strike===data.kingStrike;
+                  const isNearSpot = strike===nearestStrike;
+                  const spotRow    = isNearSpot && !isKing;
+                  return(
+                    <tr key={strike} ref={isKing ? kingRowRef : null}>
+                      <td style={{
+                        position:'sticky',left:0,zIndex:10,
+                        padding:'1px 10px',
+                        height:'18px',
+                        whiteSpace:'nowrap',
+                        background: isKing ? '#ffffff' : spotRow ? '#1c1c1c' : '#0a0a0a',
+                        color: isKing ? '#000000' : spotRow ? '#ffffff' : 'rgba(255,255,255,0.65)',
+                        fontWeight: isKing || spotRow ? 700 : 400,
+                        fontSize:'11px',
+                        borderRight:'1px solid #27272a',
+                        clipPath: spotRow
+                          ? 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)'
+                          : undefined,
+                      }}>
+                        {strike.toFixed(1)}
+                      </td>
+                      {data.expirations.map((exp,ei)=>{
+                        const val=data.values[si]?.[ei]??0;
+                        const isKingCell=isKing&&exp===data.kingExp;
+                        return(
+                          <td key={exp} style={{
+                            padding:'1px 10px',
+                            height:'18px',
+                            textAlign:'right',
+                            background: cellBg(val, visMax, visMin, isKingCell),
+                            boxShadow: isKingCell ? 'inset 0 0 0 2px rgba(168,85,247,0.6)' : 'none',
+                            whiteSpace:'nowrap',
+                          }}>
+                            <span style={{
+                              color: cellTextColor(val, isKingCell),
+                              fontWeight: isKingCell ? 700 : 400,
+                              fontSize:'10px',
+                            }}>
+                              {val!==0 ? fmt(val) : '$0.00'}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ):(
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:400,gap:16,color:'#64748b'}}>
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,color:'#64748b'}}>
           {loading
             ?<><div style={{width:40,height:40,border:'3px solid #27272a',borderTop:'3px solid #f5c842',borderRadius:'50%',animation:'spin 1s linear infinite'}}/><span>Fetching {ticker} options chain…</span></>
             :<span style={{fontSize:14}}>Enter a ticker and hit SCAN</span>
