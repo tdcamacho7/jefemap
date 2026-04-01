@@ -13,6 +13,7 @@ interface GexData {
   kingExp:      string;
   kingGex:      number;
   maxValue:     number;
+  minValue:     number;
   totalNetGex:  number;
   posStrikes:   number;
   negStrikes:   number;
@@ -39,9 +40,11 @@ function fmtExp(exp: string): string {
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
-function cellBg(val: number, maxVal: number): string {
+function cellBg(val: number, maxVal: number, minVal: number): string {
   if (!val) return 'transparent';
-  const intensity = Math.pow(Math.abs(val)/maxVal, 0.5);
+  const intensity = val > 0
+    ? Math.pow(val / maxVal, 0.5)
+    : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
   const alpha = 0.06 + intensity * 0.88;
   if (val > 0) return `rgba(16,185,129,${alpha.toFixed(3)})`;
   return `rgba(147,51,234,${alpha.toFixed(3)})`;
@@ -90,7 +93,6 @@ export default function Home() {
   return (
     <div style={{background:'#080b12',minHeight:'100vh',color:'#e2e8f0',fontFamily:"'IBM Plex Mono',monospace"}}>
 
-      {/* Header */}
       <div style={{padding:'12px 20px',borderBottom:'1px solid #1e2a3a',display:'flex',alignItems:'center',gap:12}}>
         <span style={{fontSize:20,fontWeight:700}}>
           <span style={{color:'#f5c842'}}>JEFE</span><span style={{color:'#e2e8f0'}}>MAP</span>
@@ -98,7 +100,6 @@ export default function Home() {
         <span style={{fontSize:10,color:'#4a5568',marginLeft:8}}>PROOF OF CONCEPT v0.1</span>
       </div>
 
-      {/* Controls */}
       <div style={{padding:'14px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:'1px solid #1e2a3a'}}>
         <input value={input} onChange={e=>setInput(e.target.value.toUpperCase())}
           onKeyDown={e=>e.key==='Enter'&&handleScan()} placeholder="Ticker"
@@ -115,7 +116,6 @@ export default function Home() {
         {error&&<span style={{color:'#ef4444',fontSize:12}}>⚠ {error}</span>}
       </div>
 
-      {/* King Banner */}
       {data&&(
         <div style={{margin:'12px 20px',background:'#0f172a',border:'1px solid #1e2a3a',borderRadius:8,padding:'14px 18px'}}>
           <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>👑 KING NODE · {data.ticker}</div>
@@ -131,7 +131,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Stats */}
       {data&&(
         <div style={{padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap'}}>
           {[
@@ -151,7 +150,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Heatmap Table */}
       {data?(
         <div style={{padding:'8px 20px 40px',overflowX:'auto'}}>
           <div style={{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',justifyContent:'space-between'}}>
@@ -188,7 +186,7 @@ export default function Home() {
                       const val=data.values[si]?.[ei]??0;
                       const isKingCell=isKing&&exp===data.kingExp;
                       return(
-                        <td key={exp} style={{padding:'4px 10px',textAlign:'right',background:cellBg(val,data.maxValue),outline:isKingCell?'1.5px solid rgba(245,200,66,0.5)':'none',outlineOffset:'-1px'}}>
+                        <td key={exp} style={{padding:'4px 10px',textAlign:'right',background:cellBg(val,data.maxValue,data.minValue),outline:isKingCell?'1.5px solid rgba(245,200,66,0.5)':'none',outlineOffset:'-1px'}}>
                           <span style={{color:val>0?'#86efac':val<0?'#c084fc':'#374151'}}>
                             {val!==0?fmt(val):'—'}
                           </span>
