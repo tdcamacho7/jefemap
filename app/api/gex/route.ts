@@ -81,9 +81,8 @@ export async function GET(req: NextRequest) {
 
     // 3. Select nearest N expirations — skip same-day (T < 1 day)
     const now          = Date.now() / 1000;
-    const oneDaySecs   = 86400;
     const selectedExps = allExpirations
-      .filter(ts => ts > now + oneDaySecs)   // strictly future, skip today
+      .filter(ts => ts > now - 3600)   // include today — Skylit king is 0DTE near spot
       .slice(0, maxExp);
 
     if (!selectedExps.length) throw new Error('No future expirations found');
@@ -118,8 +117,8 @@ export async function GET(req: NextRequest) {
       const { ts, data } = chains[ei];
       if (!data) continue;
 
-      // T in years — clamp to minimum 2 days to prevent near-zero blowup
-      const T = Math.max((ts - now) / (365 * 24 * 3600), 2 / 365);
+      // T in years — minimum 1 day so Black-Scholes gamma stays finite for 0DTE
+      const T = Math.max((ts - now) / (365 * 24 * 3600), 1 / 365);
 
       const processContracts = (contracts: Record<string, unknown>[], isCall: boolean) => {
         for (const c of contracts) {
@@ -135,8 +134,8 @@ export async function GET(req: NextRequest) {
           const sigma = Math.min(iv, 2.0);
 
           const gamma  = blackScholesGamma(spot, K, T, sigma);
-          const rawGex = gamma * oi * spot * spot * (isCall ? 1 : -1);
-          const gex    = capGex(rawGex);
+          const rawGex = gamma * oi * 100 * spot * (isCall ? 1 : -1);
+          const gex    = rawGex;
 
           matrix[si][ei] += gex;
           if (matrix[si][ei] > maxValue) maxValue = matrix[si][ei];
