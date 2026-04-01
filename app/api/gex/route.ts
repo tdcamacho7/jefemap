@@ -1,154 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const MD_TOKEN = process.env.MD_TOKEN!;
-const MD_BASE  = 'https://api.marketdata.app/v1';
-
-interface Contract {
-  symbol:      string;
-  side:        'call' | 'put';
-  strike:      number;
-  expiration:  string;
-  oi:          number;
-  gamma:       number;
-}
-
-interface Cell {
-  callGex: number;
-  putGex:  number;
-  netGex:  number;
-}
-
-function toDateStr(raw: number | string): string {
-  if (typeof raw === 'number') {
-    return new Date(raw * 1000).toISOString().split('T')[0];
-  }
-  return raw;
-}
+const STATIC_SNAPSHOT = {
+  ticker: 'SPY',
+  spotPrice: 654.31,
+  expirations: ['2026-04-01','2026-04-02','2026-04-06','2026-04-07','2026-04-08'],
+  strikes: [
+    672,671,670,669,668,667,666,665,664,663,662,661,660,659,658,657,656,655,654,653,
+    652,651,650,649,648,647,646,645,644,643,642,641,640,639,638,637,636,635,634,633,632,631
+  ],
+  values: [
+    [0,289700,0,0,0],
+    [-199100,711200,107000,0,0],
+    [361200,2453000,0,5438800,0],
+    [367600,-208100,-432600,544000,0],
+    [328400,-171100,-1643100,106700,4883500],
+    [3593500,-988500,4126300,62400,2289400],
+    [5000100,1284700,1144000,519400,2806700],
+    [21062000,2690400,3896800,767300,10127000],
+    [7115000,1914900,2096100,472900,4776000],
+    [6021300,-3775300,6311200,4039900,0],
+    [53865700,4622000,0,635800,316000],
+    [38823300,4470400,0,-386500,1424600],
+    [158526000,1944500,-54894200,5651800,2582000],
+    [13074200,5861500,-5282200,928100,5286100],
+    [74670900,9248700,4569100,1670800,463800],
+    [-6398500,3832900,5520800,626800,891700],
+    [49383100,1284700,2457300,1699800,2991300],
+    [13886000,5019400,13098600,4780200,1125400],
+    [-11754000,3193900,4533900,1828800,-286500],
+    [24721900,-8289300,3523600,784400,3127000],
+    [8025200,-1503600,4362100,4008600,840200],
+    [14209300,-2221000,0,-1163100,-584700],
+    [13830500,3179400,17658000,1193800,1564800],
+    [7683300,-639300,2497100,0,0],
+    [1003700,495000,2405500,871800,0],
+    [12492500,-298800,0,302700,-425300],
+    [3650900,595100,1802300,1095000,0],
+    [15263300,25354900,34662000,-3456900,-787600],
+    [2539700,4406300,824100,0,71900],
+    [902700,-4015700,1273900,0,265000],
+    [1098200,310900,0,581100,482200],
+    [-592300,4316100,6798500,191900,-792100],
+    [3619600,54089900,-1104400,1376000,-332600],
+    [2432800,400200,0,-64300,-243700],
+    [975600,1765800,12978100,976000,-379600],
+    [-747000,-913900,-763600,-29400,-155700],
+    [-260100,-2883800,5005700,346200,-133100],
+    [1734500,5778800,-42876900,2150100,-1050000],
+    [399800,-34200,5218300,1351900,-285600],
+    [513600,432800,4187600,515000,370600],
+    [2531600,210100,3146700,663800,424400],
+    [2162100,-322800,1353800,0,485600],
+  ],
+  strikeTotals: {
+    672:289700,671:619100,670:5799200,669:271000,668:3904300,
+    667:9042800,666:9754900,665:38543500,664:15374900,663:12597400,
+    662:55419500,661:44731900,660:113810100,659:14065600,658:91622500,
+    657:3540800,656:56815900,655:34808600,654:-2118800,653:20127100,
+    652:11370000,651:11400200,650:36225700,649:7541100,648:4775700,
+    647:12569000,646:7143300,645:71282200,644:7762000,643:-1838600,
+    642:2471400,641:10313900,640:58980900,639:2524900,638:16291400,
+    637:-2429600,636:2128800,635:-34213500,634:7683700,633:5503200,
+    632:7165500,631:3677700,
+  },
+  kingStrike: 660,
+  kingExp: '2026-04-01',
+  kingGex: 158526000,
+  maxValue: 158526000,
+  totalNetGex: 256000000,
+  posStrikes: 32,
+  negStrikes: 10,
+  regime: 'positive' as const,
+  timestamp: new Date().toISOString(),
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const ticker  = (searchParams.get('ticker') || 'SPY').toUpperCase();
-  const maxExp  = parseInt(searchParams.get('maxExp') || '8');
-
-  try {
-    const chainRes = await fetch(
-      `${MD_BASE}/options/chain/${ticker}/?token=${MD_TOKEN}&expiration=all&minOpenInterest=1`,
-      { cache: 'no-store' }
-    );
-    const chainData = await chainRes.json();
-    if (chainData?.s === 'error') return NextResponse.json({ error: chainData.errmsg }, { status: 500 });
-
-    const n = chainData.optionSymbol?.length ?? 0;
-    if (!n) return NextResponse.json({ error: 'No chain data' }, { status: 500 });
-
-    const chainSpot = chainData.underlyingPrice?.[0] ?? 0;
-    let quoteSpot = 0;
-    try {
-      const quoteRes  = await fetch(`${MD_BASE}/stocks/quotes/${ticker}/?token=${MD_TOKEN}`, { cache: 'no-store' });
-      const quoteData = await quoteRes.json();
-      quoteSpot = quoteData?.last?.[0] ?? quoteData?.mid?.[0] ?? 0;
-    } catch { /* ignore */ }
-
-    const spotPrice: number = quoteSpot || chainSpot;
-    if (!spotPrice) return NextResponse.json({ error: 'Could not fetch spot price' }, { status: 500 });
-
-    const today     = new Date().toISOString().split('T')[0];
-    const strikeMin = spotPrice * 0.80;
-    const strikeMax = spotPrice * 1.20;
-
-    const rawContracts: Contract[] = [];
-    for (let i = 0; i < n; i++) {
-      const strike     = chainData.strike[i] as number;
-      const expiration = toDateStr(chainData.expiration[i]);
-      const oi         = (chainData.openInterest[i] as number) ?? 0;
-      const gamma      = Math.abs((chainData.gamma[i] as number) ?? 0);
-      const side       = chainData.side[i] as 'call' | 'put';
-
-      if (!gamma || !oi)                            continue;
-      if (expiration < today)                       continue;
-      if (strike < strikeMin || strike > strikeMax) continue;
-
-      rawContracts.push({ symbol: chainData.optionSymbol[i], side, strike, expiration, oi, gamma });
-    }
-
-    const allExps = [...new Set(rawContracts.map(c => c.expiration))].sort().slice(0, maxExp);
-    const expSet  = new Set(allExps);
-
-    const allStrikes = [...new Set(rawContracts
-      .filter(c => expSet.has(c.expiration))
-      .map(c => c.strike)
-    )].sort((a, b) => b - a);
-
-    const grid: Record<number, Record<string, Cell>> = {};
-    for (const strike of allStrikes) {
-      grid[strike] = {};
-      for (const exp of allExps) {
-        grid[strike][exp] = { callGex: 0, putGex: 0, netGex: 0 };
-      }
-    }
-
-    const GEX_CAP = 50_000_000;
-    for (const c of rawContracts) {
-      if (!expSet.has(c.expiration)) continue;
-      if (!grid[c.strike])           continue;
-
-      const rawGex = c.gamma * c.oi * spotPrice * spotPrice;
-      const capped = Math.min(rawGex, GEX_CAP);
-
-      if (c.side === 'call') {
-        grid[c.strike][c.expiration].callGex += capped;
-      } else {
-        grid[c.strike][c.expiration].putGex  -= capped;
-      }
-    }
-
-    const strikeTotals: Record<number, number> = {};
-    for (const strike of allStrikes) {
-      let total = 0;
-      for (const exp of allExps) {
-        const cell = grid[strike][exp];
-        cell.netGex = cell.callGex + cell.putGex;
-        total += cell.netGex;
-      }
-      strikeTotals[strike] = total;
-    }
-
-    const values: number[][] = allStrikes.map(strike =>
-      allExps.map(exp => Math.round(grid[strike][exp].netGex))
-    );
-
-    let kingStrike = allStrikes[0];
-    let kingGex    = 0;
-    for (const strike of allStrikes) {
-      if (Math.abs(strikeTotals[strike]) > Math.abs(kingGex)) {
-        kingGex    = strikeTotals[strike];
-        kingStrike = strike;
-      }
-    }
-
-    let kingExp    = allExps[0];
-    let kingExpGex = 0;
-    for (const exp of allExps) {
-      const v = Math.abs(grid[kingStrike]?.[exp]?.netGex ?? 0);
-      if (v > kingExpGex) { kingExpGex = v; kingExp = exp; }
-    }
-
-    const allValues   = values.flat().filter(v => v !== 0);
-    const maxValue    = Math.max(...allValues.map(Math.abs), 1);
-    const totalNetGex = Object.values(strikeTotals).reduce((a, b) => a + b, 0);
-    const posStrikes  = allStrikes.filter(s => strikeTotals[s] > 0).length;
-    const negStrikes  = allStrikes.filter(s => strikeTotals[s] < 0).length;
-    const regime      = totalNetGex >= 0 ? 'positive' : 'negative';
-
-    return NextResponse.json({
-      ticker, spotPrice, expirations: allExps, strikes: allStrikes,
-      values, strikeTotals, kingStrike, kingExp, kingGex,
-      maxValue, totalNetGex, posStrikes, negStrikes, regime,
-      timestamp: new Date().toISOString(),
-    });
-
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  const ticker = (searchParams.get('ticker') || 'SPY').toUpperCase();
+  return NextResponse.json({ ...STATIC_SNAPSHOT, ticker });
 }
