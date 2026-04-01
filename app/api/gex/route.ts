@@ -79,10 +79,13 @@ export async function GET(req: NextRequest) {
     const allExpirations: number[] = result.expirationDates ?? [];
     if (!allExpirations.length) throw new Error('No expirations found');
 
-    // 3. Select nearest N expirations — skip same-day (T < 1 day)
+    // 3. Select nearest N expirations — include today by DATE not timestamp
+    // Yahoo sets expiration timestamps to midnight UTC which makes today appear
+    // "past" by mid-morning ET. Compare date strings instead.
     const now          = Date.now() / 1000;
+    const todayStr     = new Date().toISOString().split('T')[0];
     const selectedExps = allExpirations
-      .filter(ts => ts > now - 3600)   // include today — Skylit king is 0DTE near spot
+      .filter(ts => dateToYMD(ts) >= todayStr)   // keep today and future
       .slice(0, maxExp);
 
     if (!selectedExps.length) throw new Error('No future expirations found');
