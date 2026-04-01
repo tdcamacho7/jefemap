@@ -7,7 +7,7 @@ interface Contract {
   symbol:      string;
   side:        'call' | 'put';
   strike:      number;
-  expiration:  string; // YYYY-MM-DD
+  expiration:  string;
   oi:          number;
   gamma:       number;
 }
@@ -31,14 +31,7 @@ export async function GET(req: NextRequest) {
   const maxExp  = parseInt(searchParams.get('maxExp') || '8');
 
   try {
-    // 1. Live spot price
-    const quoteRes  = await fetch(`${MD_BASE}/stocks/quotes/${ticker}/?token=${MD_TOKEN}`, { cache: 'no-store' });
-    const quoteData = await quoteRes.json();
-    const spotPrice: number = quoteData?.last?.[0] ?? quoteData?.mid?.[0] ?? 0;
-    if (!spotPrice) return NextResponse.json({ error: 'Could not fetch spot price' }, { status: 500 });
-
-    // 2. Full options chain with greeks
-    const chainRes  = await fetch(
+    const chainRes = await fetch(
       `${MD_BASE}/options/chain/${ticker}/?token=${MD_TOKEN}&expiration=all&minOpenInterest=1`,
       { cache: 'no-store' }
     );
@@ -48,8 +41,18 @@ export async function GET(req: NextRequest) {
     const n = chainData.optionSymbol?.length ?? 0;
     if (!n) return NextResponse.json({ error: 'No chain data' }, { status: 500 });
 
-    // 3. Parse parallel arrays into contracts
-    const today    = new Date().toISOString().split('T')[0];
+    const chainSpot = chainData.underlyingPrice?.[0] ?? 0;
+    let quoteSpot = 0;
+    try {
+      const quoteRes  = await fetch(`${MD_BASE}/stocks/quotes/${ticker}/?token=${MD_TOKEN}`, { cache: 'no-store' });
+      const quoteData = await quoteRes.json();
+      quoteSpot = quoteData?.last?.[0] ?? quoteData?.mid?.[0] ?? 0;
+    } catch { /* ignore */ }
+
+    const spotPrice: number = quoteSpot || chainSpot;
+    if (!spotPrice) return NextResponse.json({ error: 'Could not fetch spot price' }, { status: 500 });
+
+    const today     = new Date().toISOString().split('T')[0];
     const strikeMin = spotPrice * 0.80;
     const strikeMax = spotPrice * 1.20;
 
@@ -61,24 +64,21 @@ export async function GET(req: NextRequest) {
       const gamma      = Math.abs((chainData.gamma[i] as number) ?? 0);
       const side       = chainData.side[i] as 'call' | 'put';
 
-      if (!gamma || !oi)               continue;
-      if (expiration < today)          continue; // exclude expired
+      if (!gamma || !oi)                            continue;
+      if (expiration < today)                       continue;
       if (strike < strikeMin || strike > strikeMax) continue;
 
       rawContracts.push({ symbol: chainData.optionSymbol[i], side, strike, expiration, oi, gamma });
     }
 
-    // 4. Get sorted unique expirations (limit to maxExp)
     const allExps = [...new Set(rawContracts.map(c => c.expiration))].sort().slice(0, maxExp);
     const expSet  = new Set(allExps);
 
-    // 5. Get sorted unique strikes (descending)
     const allStrikes = [...new Set(rawContracts
       .filter(c => expSet.has(c.expiration))
       .map(c => c.strike)
     )].sort((a, b) => b - a);
 
-    // 6. Build byStrike/byExp grid
     const grid: Record<number, Record<string, Cell>> = {};
     for (const strike of allStrikes) {
       grid[strike] = {};
@@ -87,23 +87,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 7. Accumulate GEX — cap each contract at $50M to kill outliers
     const GEX_CAP = 50_000_000;
     for (const c of rawContracts) {
       if (!expSet.has(c.expiration)) continue;
       if (!grid[c.strike])           continue;
 
-      const rawGex  = c.gamma * c.oi * spotPrice * spotPrice;
-      const capped  = Math.min(rawGex, GEX_CAP);
+      const rawGex = c.gamma * c.oi * spotPrice * spotPrice;
+      const capped = Math.min(rawGex, GEX_CAP);
 
       if (c.side === 'call') {
         grid[c.strike][c.expiration].callGex += capped;
       } else {
-        grid[c.strike][c.expiration].putGex  -= capped; // puts negative
+        grid[c.strike][c.expiration].putGex  -= capped;
       }
     }
 
-    // 8. Compute net GEX and strike totals
     const strikeTotals: Record<number, number> = {};
     for (const strike of allStrikes) {
       let total = 0;
@@ -115,12 +113,10 @@ export async function GET(req: NextRequest) {
       strikeTotals[strike] = total;
     }
 
-    // 9. Build values matrix [strikeIndex][expIndex]
     const values: number[][] = allStrikes.map(strike =>
       allExps.map(exp => Math.round(grid[strike][exp].netGex))
     );
 
-    // 10. King node, min/max, regime
     let kingStrike = allStrikes[0];
     let kingGex    = 0;
     for (const strike of allStrikes) {
@@ -130,36 +126,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // King expiration = expiration with highest abs GEX for king strike
-    let kingExp = allExps[0];
+    let kingExp    = allExps[0];
     let kingExpGex = 0;
     for (const exp of allExps) {
       const v = Math.abs(grid[kingStrike]?.[exp]?.netGex ?? 0);
       if (v > kingExpGex) { kingExpGex = v; kingExp = exp; }
     }
 
-    const allValues  = values.flat().filter(v => v !== 0);
-    const maxValue   = Math.max(...allValues.map(Math.abs), 1);
+    const allValues   = values.flat().filter(v => v !== 0);
+    const maxValue    = Math.max(...allValues.map(Math.abs), 1);
     const totalNetGex = Object.values(strikeTotals).reduce((a, b) => a + b, 0);
     const posStrikes  = allStrikes.filter(s => strikeTotals[s] > 0).length;
     const negStrikes  = allStrikes.filter(s => strikeTotals[s] < 0).length;
     const regime      = totalNetGex >= 0 ? 'positive' : 'negative';
 
     return NextResponse.json({
-      ticker,
-      spotPrice,
-      expirations:  allExps,
-      strikes:      allStrikes,
-      values,
-      strikeTotals,
-      kingStrike,
-      kingExp,
-      kingGex,
-      maxValue,
-      totalNetGex,
-      posStrikes,
-      negStrikes,
-      regime,
+      ticker, spotPrice, expirations: allExps, strikes: allStrikes,
+      values, strikeTotals, kingStrike, kingExp, kingGex,
+      maxValue, totalNetGex, posStrikes, negStrikes, regime,
       timestamp: new Date().toISOString(),
     });
 
