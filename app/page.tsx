@@ -1,7 +1,3 @@
-cp -r ~/Desktop/jefemap/ ~/Desktop/jefemap-backup-$(date +%Y%m%d)/
-
-Overwrite app/page.tsx with exactly this content:
-
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
