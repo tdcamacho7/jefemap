@@ -40,14 +40,27 @@ function fmtExp(exp: string): string {
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
-function cellBg(val: number, maxVal: number, minVal: number): string {
-  if (!val) return 'transparent';
+function cellBg(val: number, maxVal: number, minVal: number, isKingRow: boolean): string {
+  if (isKingRow) {
+    if (!val) return 'rgba(245,200,66,0.08)';
+    const intensity = val > 0
+      ? Math.pow(val / maxVal, 0.5)
+      : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
+    const alpha = 0.08 + intensity * 0.5;
+    return val > 0
+      ? `rgba(245,200,66,${alpha.toFixed(3)})`
+      : `rgba(147,51,234,${alpha.toFixed(3)})`;
+  }
+  if (!val) return 'rgba(8,145,178,0.04)';
   const intensity = val > 0
     ? Math.pow(val / maxVal, 0.5)
     : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
-  const alpha = 0.06 + intensity * 0.88;
-  if (val > 0) return `rgba(16,185,129,${alpha.toFixed(3)})`;
-  return `rgba(147,51,234,${alpha.toFixed(3)})`;
+  const alpha = val > 0
+    ? 0.07 + intensity * 0.75
+    : 0.07 + intensity * 0.88;
+  return val > 0
+    ? `rgba(8,145,178,${alpha.toFixed(3)})`
+    : `rgba(147,51,234,${alpha.toFixed(3)})`;
 }
 
 export default function Home() {
@@ -58,7 +71,10 @@ export default function Home() {
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string|null>(null);
   const [lastUpdate, setLastUpdate] = useState('');
-  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const [trackKing,  setTrackKing]  = useState(false);
+  const timerRef   = useRef<ReturnType<typeof setInterval>|null>(null);
+  const kingRowRef = useRef<HTMLTableRowElement|null>(null);
+  const tableRef   = useRef<HTMLDivElement|null>(null);
 
   const fetchGex = useCallback(async (tkr: string, exp: number) => {
     setLoading(true); setError(null);
@@ -78,6 +94,12 @@ export default function Home() {
     timerRef.current = setInterval(() => fetchGex(ticker, maxExp), 30000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [ticker, maxExp, fetchGex]);
+
+  useEffect(() => {
+    if (trackKing && kingRowRef.current) {
+      kingRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [trackKing, data]);
 
   function handleScan() {
     const t = input.trim().toUpperCase();
@@ -112,18 +134,29 @@ export default function Home() {
           style={{background:'#f5c842',color:'#080b12',border:'none',borderRadius:6,padding:'7px 22px',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
           {loading?'LOADING…':'SCAN'}
         </button>
+        <button onClick={()=>setTrackKing(t=>!t)}
+          style={{
+            background:trackKing?'rgba(245,200,66,0.15)':'#111827',
+            border:`1px solid ${trackKing?'#f5c842':'#2d3748'}`,
+            borderRadius:6,padding:'7px 14px',
+            color:trackKing?'#f5c842':'#64748b',
+            fontSize:12,fontWeight:trackKing?700:400,
+            cursor:'pointer',fontFamily:'inherit',
+          }}>
+          👑 {trackKing?'TRACKING KING':'TRACK KING'}
+        </button>
         {lastUpdate&&<span style={{fontSize:11,color:'#4a5568'}}><span style={{color:'#22c55e',marginRight:6}}>●</span>Live · {lastUpdate}</span>}
         {error&&<span style={{color:'#ef4444',fontSize:12}}>⚠ {error}</span>}
       </div>
 
       {data&&(
-        <div style={{margin:'12px 20px',background:'#0f172a',border:'1px solid #1e2a3a',borderRadius:8,padding:'14px 18px'}}>
-          <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>👑 KING NODE · {data.ticker}</div>
-          <div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{data.ticker} @ {fmtPrice(data.spotPrice)}</div>
-          <div style={{fontSize:32,fontWeight:700,color:data.kingGex>=0?'#f5c842':'#9333ea'}}>{data.kingStrike}</div>
-          <div style={{display:'flex',gap:12,marginTop:4,fontSize:11}}>
-            <span style={{background:data.kingGex>=0?'rgba(245,200,66,0.15)':'rgba(147,51,234,0.15)',color:data.kingGex>=0?'#f5c842':'#9333ea',padding:'2px 8px',borderRadius:4}}>
-              {data.kingGex>=0?'🟡 YELLOW':'🟣 PURPLE'} · {fmt(data.kingGex)}
+        <div style={{margin:'12px 20px',background:'rgba(245,200,66,0.06)',border:'1px solid rgba(245,200,66,0.3)',borderRadius:8,padding:'14px 18px'}}>
+          <div style={{fontSize:10,color:'#a18a30',marginBottom:4,letterSpacing:2}}>👑 KING NODE · {data.ticker}</div>
+          <div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>{data.ticker} @ {fmtPrice(data.spotPrice)}</div>
+          <div style={{fontSize:40,fontWeight:700,color:'#f5c842',lineHeight:1,marginBottom:6}}>{data.kingStrike}</div>
+          <div style={{display:'flex',gap:12,marginTop:4,fontSize:11,flexWrap:'wrap'}}>
+            <span style={{background:'rgba(245,200,66,0.2)',color:'#f5c842',padding:'3px 10px',borderRadius:4,fontWeight:700,border:'1px solid rgba(245,200,66,0.4)'}}>
+              🟡 YELLOW · {fmt(data.kingGex)}
             </span>
             <span style={{color:'#64748b'}}>📍 {(data.spotPrice-data.kingStrike).toFixed(2)} pts from price</span>
             <span style={{color:'#3b82f6'}}>📅 {fmtExp(data.kingExp)}</span>
@@ -151,19 +184,20 @@ export default function Home() {
       )}
 
       {data?(
-        <div style={{padding:'8px 20px 40px',overflowX:'auto'}}>
+        <div ref={tableRef} style={{padding:'8px 20px 40px',overflowX:'auto'}}>
           <div style={{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',justifyContent:'space-between'}}>
             <span>{data.ticker} GEX HEATMAP · SPOT: {fmtPrice(data.spotPrice)} · {data.strikes.length} STRIKES · {data.expirations.length} EXPIRATIONS</span>
             <span style={{display:'flex',gap:16}}>
-              <span>🟡 Yellow — Absorbs</span>
-              <span>🟣 Purple — Amplifies</span>
+              <span style={{color:'#f5c842'}}>👑 King Node</span>
+              <span style={{color:'#0891b2'}}>■ Absorbs</span>
+              <span style={{color:'#9333ea'}}>■ Amplifies</span>
               <span style={{color:'#38bdf8'}}>● Current Price</span>
             </span>
           </div>
           <table style={{borderCollapse:'collapse',width:'100%',fontSize:12}}>
             <thead>
               <tr>
-                <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90}}>Strike</th>
+                <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90,position:'sticky',left:0,background:'#080b12',zIndex:2}}>Strike</th>
                 {data.expirations.map(exp=>(
                   <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:110}}>
                     {fmtExp(exp)}
@@ -176,18 +210,40 @@ export default function Home() {
                 const isKing     = strike===data.kingStrike;
                 const isNearSpot = strike===nearestStrike;
                 return(
-                  <tr key={strike} style={{borderTop:'1px solid #0f172a'}}>
-                    <td style={{padding:'4px 12px',background:isKing?'rgba(245,200,66,0.08)':isNearSpot?'rgba(56,189,248,0.08)':'#080b12',borderRight:'1px solid #1e2a3a'}}>
-                      <span style={{color:isKing?'#f5c842':isNearSpot?'#38bdf8':'#94a3b8',fontWeight:isKing||isNearSpot?600:400}}>
-                        {isKing&&'👑 '}{strike}{isNearSpot&&' ←'}
+                  <tr
+                    key={strike}
+                    ref={isKing ? kingRowRef : null}
+                    style={{
+                      borderTop:isKing?'1px solid rgba(245,200,66,0.4)':'1px solid #0a0f1a',
+                      borderBottom:isKing?'1px solid rgba(245,200,66,0.4)':undefined,
+                    }}>
+                    <td style={{
+                      padding:'4px 12px',
+                      background:isKing?'rgba(245,200,66,0.15)':isNearSpot?'rgba(56,189,248,0.08)':'#080b12',
+                      borderRight:isKing?'2px solid rgba(245,200,66,0.5)':'1px solid #1e2a3a',
+                      position:'sticky',left:0,zIndex:1,
+                    }}>
+                      <span style={{color:isKing?'#f5c842':isNearSpot?'#38bdf8':'#94a3b8',fontWeight:isKing||isNearSpot?700:400,fontSize:isKing?13:12}}>
+                        {isKing?'👑 ':''}{strike}{isNearSpot&&!isKing?' ←':''}
                       </span>
                     </td>
                     {data.expirations.map((exp,ei)=>{
                       const val=data.values[si]?.[ei]??0;
                       const isKingCell=isKing&&exp===data.kingExp;
                       return(
-                        <td key={exp} style={{padding:'4px 10px',textAlign:'right',background:cellBg(val,data.maxValue,data.minValue),outline:isKingCell?'1.5px solid rgba(245,200,66,0.5)':'none',outlineOffset:'-1px'}}>
-                          <span style={{color:val>0?'#86efac':val<0?'#c084fc':'#374151'}}>
+                        <td key={exp} style={{
+                          padding:'4px 10px',
+                          textAlign:'right',
+                          background:cellBg(val,data.maxValue,data.minValue,isKing),
+                          outline:isKingCell?'2px solid rgba(245,200,66,0.7)':'none',
+                          outlineOffset:'-2px',
+                        }}>
+                          <span style={{
+                            color:isKing
+                              ?(val>0?'#fde68a':val<0?'#c084fc':'#92794a')
+                              :(val>0?'#a5f3fc':val<0?'#c084fc':'#374151'),
+                            fontWeight:isKingCell?700:400,
+                          }}>
                             {val!==0?fmt(val):'—'}
                           </span>
                         </td>
@@ -212,7 +268,7 @@ export default function Home() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}body{margin:0}
-        tr:hover td{filter:brightness(1.12)}
+        tr:hover td{filter:brightness(1.15)}
       `}</style>
     </div>
   );
