@@ -1,3 +1,7 @@
+cp -r ~/Desktop/jefemap/ ~/Desktop/jefemap-backup-$(date +%Y%m%d)/
+
+Overwrite app/page.tsx with exactly this content:
+
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -40,14 +44,39 @@ function fmtExp(exp: string): string {
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
+function computeMinMax(values: number[][]): { min: number; max: number } {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const row of values) {
+    for (const v of row) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  if (min === Infinity)  min = 0;
+  if (max === -Infinity) max = 0;
+  return { min, max };
+}
+
 function cellBg(val: number, maxVal: number, minVal: number, isKingCell: boolean): string {
   if (isKingCell) return 'rgba(245,200,66,0.85)';
-  if (!val) return 'rgba(8,145,178,0.13)';
-  const intensity = val > 0
-    ? Math.pow(val / maxVal, 0.5)
-    : Math.pow(Math.abs(val) / Math.abs(minVal), 0.5);
-  if (val > 0) return `rgba(8,145,178,${(0.13 + intensity * 0.75).toFixed(3)})`;
-  return `rgba(147,51,234,${(0.13 + intensity * 0.80).toFixed(3)})`;
+  if (val === 0)  return 'rgba(8,145,178,0.07)';
+  if (val > 0) {
+    const t = maxVal > 0 ? Math.pow(val / maxVal, 0.5) : 0;
+    const alpha = 0.08 + t * 0.82;
+    return `rgba(8,145,178,${alpha.toFixed(3)})`;
+  } else {
+    const t = minVal < 0 ? Math.pow(val / minVal, 0.5) : 0;
+    const alpha = 0.08 + t * 0.82;
+    return `rgba(147,51,234,${alpha.toFixed(3)})`;
+  }
+}
+
+function cellTextColor(val: number, isKingCell: boolean): string {
+  if (isKingCell) return '#080b12';
+  if (val > 0)    return '#a5f3fc';
+  if (val < 0)    return '#c084fc';
+  return '#1e3a4a';
 }
 
 export default function Home() {
@@ -94,26 +123,30 @@ export default function Home() {
     setTicker(t);
   }
 
+  const { min: visMin, max: visMax } = data
+    ? computeMinMax(data.values)
+    : { min: 0, max: 0 };
+
   const nearestStrike = data
     ? data.strikes.reduce((p,c) => Math.abs(c-data.spotPrice)<Math.abs(p-data.spotPrice)?c:p)
     : null;
 
   return (
-    <div style={{background:'#080b12',minHeight:'100vh',color:'#e2e8f0',fontFamily:"'IBM Plex Mono',monospace"}}>
+    <div style={{background:'#0a0a0a',minHeight:'100vh',color:'#e2e8f0',fontFamily:"'IBM Plex Mono',monospace"}}>
 
-      <div style={{padding:'12px 20px',borderBottom:'1px solid #1e2a3a',display:'flex',alignItems:'center',gap:12}}>
+      <div style={{padding:'12px 20px',borderBottom:'1px solid #27272a',display:'flex',alignItems:'center',gap:12}}>
         <span style={{fontSize:20,fontWeight:700}}>
           <span style={{color:'#f5c842'}}>JEFE</span><span style={{color:'#e2e8f0'}}>MAP</span>
         </span>
-        <span style={{fontSize:10,color:'#4a5568',marginLeft:8}}>PROOF OF CONCEPT v0.1</span>
+        <span style={{fontSize:10,color:'#52525b',marginLeft:8}}>PROOF OF CONCEPT v0.2</span>
       </div>
 
-      <div style={{padding:'14px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:'1px solid #1e2a3a'}}>
+      <div style={{padding:'14px 20px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:'1px solid #27272a'}}>
         <input value={input} onChange={e=>setInput(e.target.value.toUpperCase())}
           onKeyDown={e=>e.key==='Enter'&&handleScan()} placeholder="Ticker"
-          style={{background:'#111827',border:'1px solid #2d3748',borderRadius:6,padding:'7px 12px',color:'#e2e8f0',fontSize:13,width:90,fontFamily:'inherit'}}/>
+          style={{background:'#18181b',border:'1px solid #3f3f46',borderRadius:6,padding:'7px 12px',color:'#e2e8f0',fontSize:13,width:90,fontFamily:'inherit'}}/>
         <select value={maxExp} onChange={e=>setMaxExp(+e.target.value)}
-          style={{background:'#111827',border:'1px solid #2d3748',borderRadius:6,padding:'7px 10px',color:'#e2e8f0',fontSize:12,fontFamily:'inherit'}}>
+          style={{background:'#18181b',border:'1px solid #3f3f46',borderRadius:6,padding:'7px 10px',color:'#e2e8f0',fontSize:12,fontFamily:'inherit'}}>
           {[3,5,8,12].map(n=><option key={n} value={n}>{n} exp</option>)}
         </select>
         <button onClick={handleScan} disabled={loading}
@@ -122,16 +155,16 @@ export default function Home() {
         </button>
         <button onClick={()=>setTrackKing(t=>!t)}
           style={{
-            background:trackKing?'rgba(245,200,66,0.15)':'#111827',
-            border:`1px solid ${trackKing?'#f5c842':'#2d3748'}`,
+            background:trackKing?'rgba(245,200,66,0.15)':'#18181b',
+            border:`1px solid ${trackKing?'#f5c842':'#3f3f46'}`,
             borderRadius:6,padding:'7px 14px',
-            color:trackKing?'#f5c842':'#64748b',
+            color:trackKing?'#f5c842':'#71717a',
             fontSize:12,fontWeight:trackKing?700:400,
             cursor:'pointer',fontFamily:'inherit',
           }}>
           👑 {trackKing?'TRACKING KING':'TRACK KING'}
         </button>
-        {lastUpdate&&<span style={{fontSize:11,color:'#4a5568'}}><span style={{color:'#22c55e',marginRight:6}}>●</span>Live · {lastUpdate}</span>}
+        {lastUpdate&&<span style={{fontSize:11,color:'#52525b'}}><span style={{color:'#22c55e',marginRight:6}}>●</span>Live · {lastUpdate}</span>}
         {error&&<span style={{color:'#ef4444',fontSize:12}}>⚠ {error}</span>}
       </div>
 
@@ -142,10 +175,11 @@ export default function Home() {
           <div style={{fontSize:40,fontWeight:700,color:'#f5c842',lineHeight:1,marginBottom:6}}>{data.kingStrike}</div>
           <div style={{display:'flex',gap:12,marginTop:4,fontSize:11,flexWrap:'wrap'}}>
             <span style={{background:'rgba(245,200,66,0.2)',color:'#f5c842',padding:'3px 10px',borderRadius:4,fontWeight:700,border:'1px solid rgba(245,200,66,0.4)'}}>
-              🟡 YELLOW · {fmt(data.kingGex)}
+              {fmt(data.kingGex)}
             </span>
-            <span style={{color:'#64748b'}}>📍 {(data.spotPrice-data.kingStrike).toFixed(2)} pts from price</span>
+            <span style={{color:'#64748b'}}>📍 {(data.spotPrice-data.kingStrike).toFixed(2)} pts from spot</span>
             <span style={{color:'#3b82f6'}}>📅 {fmtExp(data.kingExp)}</span>
+            <span style={{color:'#52525b',fontSize:10}}>Color scale: {fmt(visMin)} → {fmt(visMax)}</span>
           </div>
         </div>
       )}
@@ -153,16 +187,14 @@ export default function Home() {
       {data&&(
         <div style={{padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap'}}>
           {[
-            {label:'Ticker',val:data.ticker},
             {label:'Spot',val:fmtPrice(data.spotPrice)},
-            {label:'Expirations',val:data.expirations.length},
-            {label:'Total Net GEX',val:fmt(data.totalNetGex)},
-            {label:'Regime',val:data.regime==='positive'?'🟡 GEX Positive':'🟣 GEX Negative'},
+            {label:'Net GEX',val:fmt(data.totalNetGex)},
+            {label:'Regime',val:data.regime==='positive'?'🟡 Positive':'🟣 Negative'},
             {label:'+ Strikes',val:data.posStrikes,color:'#22c55e'},
             {label:'- Strikes',val:data.negStrikes,color:'#ef4444'},
           ].map(({label,val,color})=>(
-            <div key={label} style={{background:'#0f172a',border:'1px solid #1e2a3a',borderRadius:6,padding:'5px 12px',fontSize:11}}>
-              <span style={{color:'#64748b'}}>{label}: </span>
+            <div key={label} style={{background:'#111111',border:'1px solid #27272a',borderRadius:6,padding:'5px 12px',fontSize:11}}>
+              <span style={{color:'#71717a'}}>{label}: </span>
               <span style={{color:color||'#e2e8f0',fontWeight:600}}>{String(val)}</span>
             </div>
           ))}
@@ -171,52 +203,48 @@ export default function Home() {
 
       {data?(
         <div style={{padding:'8px 20px 40px',overflowX:'auto'}}>
-          <div style={{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
-            <span>{data.ticker} GEX HEATMAP · SPOT: {fmtPrice(data.spotPrice)} · {data.strikes.length} STRIKES · {data.expirations.length} EXPIRATIONS</span>
-            <span style={{display:'flex',gap:16}}>
-              <span style={{color:'#f5c842'}}>👑 King Node</span>
-              <span style={{color:'#0891b2'}}>■ Absorbs</span>
-              <span style={{color:'#9333ea'}}>■ Amplifies</span>
-              <span style={{color:'#38bdf8'}}>● Current Price</span>
-            </span>
-          </div>
-          <table style={{borderCollapse:'collapse',width:'100%',fontSize:12}}>
-            <thead style={{position:'sticky',top:0,zIndex:3}}>
-              <tr style={{background:'#080b12'}}>
-                <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90,position:'sticky',left:0,background:'#080b12',zIndex:4}}>Strike</th>
+          <table style={{borderCollapse:'collapse',fontSize:'10px',width:'100%',tableLayout:'auto'}}>
+            <thead style={{position:'sticky',top:0,zIndex:30}}>
+              <tr>
+                <th style={{textAlign:'left',padding:'4px 8px',color:'rgba(255,255,255,0.85)',fontWeight:600,fontSize:'9px',minWidth:64,position:'sticky',left:0,background:'#0a0a0a',zIndex:40,borderBottom:'1px solid rgba(255,255,255,0.1)'}}>Strike</th>
                 {data.expirations.map(exp=>(
-                  <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:120,background:'#080b12'}}>
+                  <th key={exp} style={{textAlign:'center',padding:'4px 4px',color:exp===data.kingExp?'#f5c842':'rgba(255,255,255,0.85)',fontWeight:600,fontSize:'9px',minWidth:90,background:'#0a0a0a',borderBottom:'1px solid rgba(255,255,255,0.1)',whiteSpace:'nowrap'}}>
                     {fmtExp(exp)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {data.strikes.map((strike,si)=>{
+              {[...data.strikes].reverse().map((strike,revIdx)=>{
+                const si = data.strikes.length - 1 - revIdx;
                 const isKing     = strike===data.kingStrike;
                 const isNearSpot = strike===nearestStrike;
+                const spotRow    = isNearSpot && !isKing;
                 return(
-                  <tr key={strike} ref={isKing?kingRowRef:null} style={{borderTop:'1px solid #0a0f1a'}}>
+                  <tr key={strike} ref={isKing ? kingRowRef : null}>
                     <td style={{
-                      padding:'4px 12px',
-                      background:isNearSpot?'rgba(56,189,248,0.08)':'#080b12',
-                      borderRight:'1px solid #1e2a3a',
-                      position:'sticky',left:0,zIndex:1,
+                      position:'sticky',left:0,zIndex:10,
+                      padding:'1px 8px',height:'18px',whiteSpace:'nowrap',
+                      background: isKing ? '#ffffff' : spotRow ? '#18181b' : '#0a0a0a',
+                      color: isKing ? '#000000' : spotRow ? '#ffffff' : 'rgba(255,255,255,0.8)',
+                      fontWeight: isKing || spotRow ? 700 : 500,
+                      fontSize:'11px',
+                      clipPath: spotRow ? 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)' : undefined,
                     }}>
-                      <span style={{color:isKing?'#f5c842':isNearSpot?'#38bdf8':'#94a3b8',fontWeight:isKing||isNearSpot?700:400,fontSize:isKing?13:12}}>
-                        {isKing?'👑 ':''}{strike}{isNearSpot&&!isKing?' ←':''}
-                      </span>
+                      {strike.toFixed(1)}
                     </td>
                     {data.expirations.map((exp,ei)=>{
                       const val=data.values[si]?.[ei]??0;
                       const isKingCell=isKing&&exp===data.kingExp;
                       return(
-                        <td key={exp} style={{padding:'4px 10px',textAlign:'right',background:cellBg(val,data.maxValue,data.minValue,isKingCell)}}>
-                          <span style={{
-                            color:isKingCell?'#080b12':(val>0?'#a5f3fc':val<0?'#c084fc':'#2a4a5a'),
-                            fontWeight:isKingCell?700:400,
-                          }}>
-                            {val!==0?fmt(val):'—'}
+                        <td key={exp} style={{
+                          padding:'1px 8px',height:'18px',textAlign:'right',
+                          background: cellBg(val, visMax, visMin, isKingCell),
+                          boxShadow: isKingCell ? 'inset 0 0 0 2px rgba(168,85,247,0.6)' : 'none',
+                          whiteSpace:'nowrap',
+                        }}>
+                          <span style={{color:cellTextColor(val,isKingCell),fontWeight:isKingCell?700:400,fontSize:'10px'}}>
+                            {val!==0 ? fmt(val) : '$0.00'}
                           </span>
                         </td>
                       );
@@ -230,7 +258,7 @@ export default function Home() {
       ):(
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:400,gap:16,color:'#64748b'}}>
           {loading
-            ?<><div style={{width:40,height:40,border:'3px solid #1e2a3a',borderTop:'3px solid #f5c842',borderRadius:'50%',animation:'spin 1s linear infinite'}}/><span>Fetching {ticker} options chain…</span></>
+            ?<><div style={{width:40,height:40,border:'3px solid #27272a',borderTop:'3px solid #f5c842',borderRadius:'50%',animation:'spin 1s linear infinite'}}/><span>Fetching {ticker} options chain…</span></>
             :<span style={{fontSize:14}}>Enter a ticker and hit SCAN</span>
           }
         </div>
@@ -240,7 +268,7 @@ export default function Home() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}body{margin:0}
-        tr:hover td{filter:brightness(1.15)}
+        tr:hover td{filter:brightness(1.2)}
       `}</style>
     </div>
   );
