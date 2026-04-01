@@ -77,7 +77,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchGex(ticker, maxExp);
-    timerRef.current = setInterval(() => fetchGex(ticker, maxExp), 60000);
+    timerRef.current = setInterval(() => fetchGex(ticker, maxExp), 30000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [ticker, maxExp, fetchGex]);
 
@@ -181,11 +181,11 @@ export default function Home() {
             </span>
           </div>
           <table style={{borderCollapse:'collapse',width:'100%',fontSize:12}}>
-            <thead>
-              <tr>
-                <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90,position:'sticky',left:0,background:'#080b12',zIndex:2}}>Strike</th>
+            <thead style={{position:'sticky',top:0,zIndex:3}}>
+              <tr style={{background:'#080b12'}}>
+                <th style={{textAlign:'left',padding:'6px 12px',color:'#64748b',fontWeight:400,minWidth:90,position:'sticky',left:0,background:'#080b12',zIndex:4}}>Strike</th>
                 {data.expirations.map(exp=>(
-                  <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:120}}>
+                  <th key={exp} style={{textAlign:'right',padding:'6px 10px',color:exp===data.kingExp?'#f5c842':'#64748b',fontWeight:exp===data.kingExp?600:400,minWidth:120,background:'#080b12'}}>
                     {fmtExp(exp)}
                   </th>
                 ))}
